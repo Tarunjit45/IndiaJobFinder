@@ -2,15 +2,28 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Job } from "../types";
 
-// Safe retrieval of API Key for browser environments
+/**
+ * In a browser-only environment (no build step like Vite/Webpack),
+ * process.env is not available. This function safely attempts to get the key
+ * without crashing the application.
+ */
 const getApiKey = () => {
   try {
-    // Check if process exists to avoid "process is not defined" error in some browser environments
-    const key = typeof process !== 'undefined' ? process.env?.API_KEY : undefined;
-    if (!key) {
-      console.warn("IndiaJobFinder: API_KEY is missing from environment variables. Please check your Vercel project settings.");
+    // 1. Check if defined in window (some injectors use this)
+    if ((window as any).API_KEY) return (window as any).API_KEY;
+    
+    // 2. Check process.env safely
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      return process.env.API_KEY;
     }
-    return key || '';
+
+    // 3. Look for a global config object
+    if ((window as any)._env_ && (window as any)._env_.API_KEY) {
+      return (window as any)._env_.API_KEY;
+    }
+
+    console.warn("IndiaJobFinder: API_KEY not found in environment. Ensure it is set in Vercel.");
+    return '';
   } catch (e) {
     return '';
   }
@@ -18,14 +31,15 @@ const getApiKey = () => {
 
 export const searchJobs = async (age: number, jobType: string): Promise<{ jobs: Job[], sources: any[] }> => {
   const apiKey = getApiKey();
+  
+  // Initialize AI inside the function to ensure it uses the latest key state
   const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `Perform an exhaustive deep-web search for ${jobType} jobs in India suitable for a ${age}-year-old candidate.
   
   PRIORITY TARGETS:
   1. Niche regional/state department notifications (e.g., Municipalities, local cooperatives, State PSCs).
-  2. Less-known private startups, local industrial estates, and specialized technical roles.
-  3. "Hidden" jobs on official departmental 'Careers' pages not on aggregators.
+  2. Less-known private startups and specialized technical roles.
   
   RULES:
   - Use Google Search tool.
@@ -75,6 +89,10 @@ export const searchJobs = async (age: number, jobType: string): Promise<{ jobs: 
     return { jobs, sources };
   } catch (error) {
     console.error("Deep Scan Search Error:", error);
+    // If the error is an API key issue, alert the user or log clearly
+    if (error instanceof Error && error.message.includes('API_KEY')) {
+      console.error("CRITICAL: API Key is invalid or missing in Vercel environment variables.");
+    }
     return { jobs: [], sources: [] };
   }
 };
