@@ -1,98 +1,100 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Job } from "../types";
 
-/**
- * In a browser-only environment (no build step like Vite/Webpack),
- * process.env is not available. This function safely attempts to get the key
- * without crashing the application.
- */
 const getApiKey = () => {
-  try {
-    // 1. Check if defined in window (some injectors use this)
-    if ((window as any).API_KEY) return (window as any).API_KEY;
-    
-    // 2. Check process.env safely
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
-    }
-
-    // 3. Look for a global config object
-    if ((window as any)._env_ && (window as any)._env_.API_KEY) {
-      return (window as any)._env_.API_KEY;
-    }
-
-    console.warn("IndiaJobFinder: API_KEY not found in environment. Ensure it is set in Vercel.");
-    return '';
-  } catch (e) {
-    return '';
-  }
+  return typeof process !== 'undefined' ? process.env?.API_KEY : '';
 };
 
-export const searchJobs = async (age: number, jobType: string): Promise<{ jobs: Job[], sources: any[] }> => {
+export const searchJobs = async (age: number, jobType: string, onProgress?: (msg: string) => void): Promise<{ jobs: Job[], sources: any[] }> => {
   const apiKey = getApiKey();
   
-  // Initialize AI inside the function to ensure it uses the latest key state
+  if (!apiKey) {
+    throw new Error("API_KEY_MISSING");
+  }
+
   const ai = new GoogleGenAI({ apiKey });
 
-  const prompt = `Perform an exhaustive deep-web search for ${jobType} jobs in India suitable for a ${age}-year-old candidate.
+  onProgress?.("Initiating Global Deep Scan...");
+
+  // Optimized single-pass prompt. Even with googleSearch, we can ask for a specific 
+  // text structure that is extremely easy to parse (like a pseudo-JSON block).
+  const prompt = `SEARCH REQUEST: Find 8 active ${jobType} job openings in India for a ${age}-year-old candidate.
   
-  PRIORITY TARGETS:
-  1. Niche regional/state department notifications (e.g., Municipalities, local cooperatives, State PSCs).
-  2. Less-known private startups and specialized technical roles.
+  TARGETS: 
+  - Recent State/Central Govt notifications.
+  - New private sector openings from LinkedIn/Startups.
   
-  RULES:
-  - Use Google Search tool.
-  - Return ONLY a valid JSON array.
+  OUTPUT FORMAT:
+  You must provide a strictly formatted list. Start with the token [DATA_START] and end with [DATA_END].
+  Inside, provide a JSON-like array of objects with these keys: id, title, organization, type, location, ageMin, ageMax, eligibility, lastDate, sourceUrl, isUpcoming.
   
-  SCHEMA: {title, organization, type, location, ageLimit:{min,max}, eligibility, startDate, lastDate, sourceUrl, isUpcoming}`;
+  Only include results that match the age: ${age}.`;
 
   try {
+    onProgress?.("Accessing Google Search Index...");
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              organization: { type: Type.STRING },
-              type: { type: Type.STRING },
-              location: { type: Type.STRING },
-              ageLimit: {
-                type: Type.OBJECT,
-                properties: {
-                  min: { type: Type.NUMBER },
-                  max: { type: Type.NUMBER }
-                },
-                required: ["min", "max"]
-              },
-              eligibility: { type: Type.STRING },
-              startDate: { type: Type.STRING },
-              lastDate: { type: Type.STRING },
-              sourceUrl: { type: Type.STRING },
-              isUpcoming: { type: Type.BOOLEAN }
-            },
-            required: ["title", "organization", "type", "lastDate", "isUpcoming"]
-          }
-        }
+        // Using a small thinking budget to speed up reasoning while maintaining quality
+        thinkingConfig: { thinkingBudget: 0 } 
       },
     });
 
-    const cleanedText = response.text || '[]';
-    const jobs = JSON.parse(cleanedText.replace(/```json|```/g, "").trim() || '[]');
+    onProgress?.("Extracting Data Points...");
+    const text = response.text;
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    return { jobs, sources };
-  } catch (error) {
-    console.error("Deep Scan Search Error:", error);
-    // If the error is an API key issue, alert the user or log clearly
-    if (error instanceof Error && error.message.includes('API_KEY')) {
-      console.error("CRITICAL: API Key is invalid or missing in Vercel environment variables.");
+
+    let jobs: Job[] = [];
+    
+    // Efficient extraction using string markers
+    const dataMatch = text.match(/\[DATA_START\]([\s\S]*?)\[DATA_END\]/);
+    const jsonToParse = dataMatch ? dataMatch[1] : text;
+
+    try {
+      // Find the first '[' and last ']' to isolate the array
+      const startIdx = jsonToParse.indexOf('[');
+      const endIdx = jsonToParse.lastIndexOf(']');
+      
+      if (startIdx !== -1 && endIdx !== -1) {
+        const cleanedJson = jsonToParse.substring(startIdx, endIdx + 1);
+        const rawJobs = JSON.parse(cleanedJson);
+        
+        // Map to our internal type
+        jobs = rawJobs.map((j: any) => ({
+          id: j.id || Math.random().toString(36).substr(2, 9),
+          title: j.title || "Job Opening",
+          organization: j.organization || "Unknown Org",
+          type: j.type || "Private",
+          location: j.location || "India",
+          ageLimit: { min: j.ageMin || 18, max: j.ageMax || 45 },
+          eligibility: j.eligibility || "Check source for details",
+          lastDate: j.lastDate || "N/A",
+          sourceUrl: j.sourceUrl || "",
+          isUpcoming: !!j.isUpcoming,
+          description: j.description || ""
+        }));
+      }
+    } catch (e) {
+      console.warn("Fast parse failed, trying secondary extraction...");
+      // If the primary parse failed, we'll do one quick cleanup pass
+      const cleanup = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Convert this text into a clean JSON array of jobs: ${text.substring(0, 2000)}`,
+        config: { responseMimeType: "application/json" }
+      });
+      jobs = JSON.parse(cleanup.text);
     }
+
+    onProgress?.("Scan Complete.");
+    return { jobs, sources };
+  } catch (error: any) {
+    if (error?.message?.includes('Requested entity was not found')) {
+      throw new Error("API_KEY_INVALID");
+    }
+    console.error("Search Error:", error);
     return { jobs: [], sources: [] };
   }
 };
