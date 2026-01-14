@@ -1,21 +1,9 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import Header from './components/Header';
 import JobCard from './components/JobCard';
 import { searchJobs } from './services/geminiService';
 import { Job, GroundingSource } from './types';
-
-// Moved interface and declaration to ensure identical modifiers and types across the module
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    aistudio: AIStudio;
-  }
-}
 
 const App: React.FC = () => {
   const [age, setAge] = useState<string>('21');
@@ -25,25 +13,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMsg, setProgressMsg] = useState<string>('');
   const [hasSearched, setHasSearched] = useState<boolean>(false);
-  const [needsKey, setNeedsKey] = useState<boolean>(false);
-
-  useEffect(() => {
-    const checkKey = async () => {
-      const envKey = typeof process !== 'undefined' ? process.env?.API_KEY : null;
-      if (!envKey && window.aistudio) {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
-        if (!hasKey) setNeedsKey(true);
-      }
-    };
-    checkKey();
-  }, []);
-
-  const handleOpenKeySelector = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setNeedsKey(false);
-    }
-  };
+  const [error, setError] = useState<string | null>(null);
 
   const handleSearch = useCallback(async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -51,6 +21,7 @@ const App: React.FC = () => {
 
     setLoading(true);
     setHasSearched(true);
+    setError(null);
     setProgressMsg('Warming up Deep Scan engine...');
     
     try {
@@ -59,6 +30,11 @@ const App: React.FC = () => {
         jobType,
         (msg) => setProgressMsg(msg)
       );
+      
+      if (fetchedJobs.length === 0) {
+        setProgressMsg('No results found. Try broader keywords.');
+      }
+      
       setJobs(fetchedJobs);
       const processedSources = fetchedSources.map((chunk: any) => ({
         title: chunk.web?.title || 'Job Portal',
@@ -66,39 +42,13 @@ const App: React.FC = () => {
       })).filter(s => s.uri !== '#');
       setSources(processedSources);
     } catch (err: any) {
-      if (err.message === "API_KEY_MISSING" || err.message === "API_KEY_INVALID") {
-        setNeedsKey(true);
-      }
       console.error(err);
+      setError('Search failed. Please try again in a moment.');
     } finally {
       setLoading(false);
       setProgressMsg('');
     }
   }, [age, jobType, loading]);
-
-  if (needsKey) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl border border-slate-100">
-          <div className="bg-indigo-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
-          </div>
-          <h2 className="text-2xl font-black text-slate-900 mb-2">Connect Deep Scan</h2>
-          <p className="text-slate-500 font-bold text-sm mb-8 leading-relaxed">
-            Select an API key to enable real-time tracking of Indian job portals.
-            <br />
-            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Billing Documentation</a>
-          </p>
-          <button 
-            onClick={handleOpenKeySelector}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl transition-all active:scale-95 shadow-lg uppercase tracking-widest text-xs"
-          >
-            Select API Key
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const ongoingJobs = jobs.filter(j => !j.isUpcoming);
   const upcomingJobs = jobs.filter(j => j.isUpcoming);
@@ -109,11 +59,11 @@ const App: React.FC = () => {
       
       <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         <div className="mb-10 text-center">
-          <h2 className="text-4xl sm:text-6xl font-[1000] text-slate-900 mb-4 tracking-tighter leading-none">
-            Deep <span className="text-indigo-600">Scan</span> Discovery
+          <h2 className="text-4xl sm:text-6xl font-[1000] text-slate-900 mb-4 tracking-tighter leading-none uppercase">
+            Deep <span className="text-indigo-600">Scan</span>
           </h2>
           <p className="text-slate-500 font-bold max-w-2xl mx-auto mb-8 text-sm sm:text-base px-4 leading-relaxed">
-            Scouring regional portals and private boards across India for {age} year olds.
+            Real-time tracking of Indian Government & Private sector jobs for {age} year olds.
           </p>
 
           <form 
@@ -146,7 +96,7 @@ const App: React.FC = () => {
             <button 
               type="submit"
               disabled={loading}
-              className="w-full sm:w-auto bg-slate-900 hover:bg-black text-white font-black px-12 py-4 rounded-[1.5rem] transition-all flex items-center justify-center gap-3 text-sm uppercase tracking-widest"
+              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black px-12 py-4 rounded-[1.5rem] transition-all flex items-center justify-center gap-3 text-sm uppercase tracking-widest shadow-xl shadow-indigo-100"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -157,9 +107,15 @@ const App: React.FC = () => {
           </form>
 
           {loading && (
-            <div className="mt-8 flex flex-col items-center animate-bounce">
-              <div className="text-indigo-600 font-black text-[10px] uppercase tracking-[0.3em] mb-2">Live Status</div>
+            <div className="mt-8 flex flex-col items-center">
+              <div className="text-indigo-600 font-black text-[10px] uppercase tracking-[0.3em] mb-2 animate-pulse">Scanning Web...</div>
               <div className="text-slate-900 font-black text-sm">{progressMsg}</div>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-6 text-red-500 font-bold text-sm">
+              {error}
             </div>
           )}
         </div>
@@ -175,8 +131,8 @@ const App: React.FC = () => {
             {ongoingJobs.length > 0 && (
               <section>
                 <div className="flex items-center gap-4 mb-8">
-                  <div className="bg-indigo-600 text-white text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest">Active Now</div>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Verified Opportunities</h3>
+                  <div className="bg-indigo-600 text-white text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest">Ongoing</div>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Active Opportunities</h3>
                   <div className="h-[2px] flex-grow bg-slate-50"></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -188,8 +144,8 @@ const App: React.FC = () => {
             {upcomingJobs.length > 0 && (
               <section>
                 <div className="flex items-center gap-4 mb-8">
-                  <div className="bg-orange-600 text-white text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest">Hidden/Advanced</div>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Scanning Upcoming Notifications</h3>
+                  <div className="bg-orange-600 text-white text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest">Upcoming</div>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Anticipated Notifications</h3>
                   <div className="h-[2px] flex-grow bg-slate-50"></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -198,10 +154,10 @@ const App: React.FC = () => {
               </section>
             )}
           </div>
-        ) : hasSearched && (
+        ) : hasSearched && !loading && (
           <div className="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
-            <h3 className="text-2xl font-black text-slate-900 mb-2">Deep Scan came up empty</h3>
-            <p className="text-slate-500 font-bold">Try adjusting filters or age criteria.</p>
+            <h3 className="text-2xl font-black text-slate-900 mb-2">No results found</h3>
+            <p className="text-slate-500 font-bold">Try changing your filters or age criteria.</p>
           </div>
         )}
 
