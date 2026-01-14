@@ -2,16 +2,33 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Job } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Safe retrieval of API Key for browser environments
+const getApiKey = () => {
+  try {
+    // Check if process exists to avoid "process is not defined" error in some browser environments
+    const key = typeof process !== 'undefined' ? process.env?.API_KEY : undefined;
+    if (!key) {
+      console.warn("IndiaJobFinder: API_KEY is missing from environment variables. Please check your Vercel project settings.");
+    }
+    return key || '';
+  } catch (e) {
+    return '';
+  }
+};
 
 export const searchJobs = async (age: number, jobType: string): Promise<{ jobs: Job[], sources: any[] }> => {
-  // Deep search prompt targeting niche and non-popular jobs with strict JSON output
-  const prompt = `DEEP WEB SEARCH: Find EVERY possible ${jobType} job in India suitable for age ${age}. 
-  CRITICAL: Look for niche regional/state notifications, local startups, and departmental notifications (Sarkari, Private, Niche).
-  DO NOT limit to top 10. Return as many as found.
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `Perform an exhaustive deep-web search for ${jobType} jobs in India suitable for a ${age}-year-old candidate.
+  
+  PRIORITY TARGETS:
+  1. Niche regional/state department notifications (e.g., Municipalities, local cooperatives, State PSCs).
+  2. Less-known private startups, local industrial estates, and specialized technical roles.
+  3. "Hidden" jobs on official departmental 'Careers' pages not on aggregators.
   
   RULES:
-  - isUpcoming: true if notification is recently released or starting soon.
+  - Use Google Search tool.
   - Return ONLY a valid JSON array.
   
   SCHEMA: {title, organization, type, location, ageLimit:{min,max}, eligibility, startDate, lastDate, sourceUrl, isUpcoming}`;
@@ -52,11 +69,12 @@ export const searchJobs = async (age: number, jobType: string): Promise<{ jobs: 
       },
     });
 
-    const jobs = JSON.parse(response.text || '[]');
+    const cleanedText = response.text || '[]';
+    const jobs = JSON.parse(cleanedText.replace(/```json|```/g, "").trim() || '[]');
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     return { jobs, sources };
   } catch (error) {
-    console.error("Vercel Search Error:", error);
+    console.error("Deep Scan Search Error:", error);
     return { jobs: [], sources: [] };
   }
 };
