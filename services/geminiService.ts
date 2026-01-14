@@ -3,19 +3,13 @@ import { GoogleGenAI } from "@google/genai";
 import { Job } from "../types";
 
 const getApiKey = () => {
-  // 1. Check localStorage for user-provided key
+  // Priority 1: User provided key (Saved in browser)
   const savedKey = localStorage.getItem('IJF_API_KEY');
   if (savedKey) return savedKey;
 
-  // 2. Check various environment variable patterns
-  const envKey = 
-    (process.env as any)?.API_KEY || 
-    (process.env as any)?.VITE_API_KEY || 
-    (process.env as any)?.NEXT_PUBLIC_API_KEY ||
-    (window as any).process?.env?.API_KEY || 
-    "";
-    
-  return envKey;
+  // Priority 2: Injected environment variable (Vercel)
+  // Note: Vercel requires NEXT_PUBLIC_ prefix for client-side access
+  return (process.env as any)?.NEXT_PUBLIC_API_KEY || (process.env as any)?.API_KEY || "";
 };
 
 export const searchJobs = async (age: number, jobType: string, onProgress?: (msg: string) => void): Promise<{ jobs: Job[], sources: any[] }> => {
@@ -27,24 +21,26 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
 
   const ai = new GoogleGenAI({ apiKey });
 
-  onProgress?.("Initiating Deep Scan...");
+  onProgress?.("Connecting to India Job Network...");
 
   const prompt = `Find 8 active ${jobType} job openings in India for a ${age}-year-old. 
-  Focus on the most recent 2024/2025 notifications. 
+  Focus on the most recent notifications. 
   Strictly format the result as a JSON array between [DATA_START] and [DATA_END]. 
   Keys: id, title, organization, type, location, ageMin, ageMax, eligibility, lastDate, sourceUrl, isUpcoming.`;
 
   try {
-    onProgress?.("Searching Indian Portals...");
+    onProgress?.("Scanning Government & Private Portals...");
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
+        // Keeping it fast and free
+        thinkingConfig: { thinkingBudget: 0 }
       },
     });
 
-    onProgress?.("Decoding results...");
+    onProgress?.("Formatting results...");
     const text = response.text || "";
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
@@ -60,16 +56,17 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
         jobs = JSON.parse(cleaned).map((j: any) => ({
           ...j,
           id: j.id || Math.random().toString(36).substr(2, 9),
-          ageLimit: { min: j.ageMin || 18, max: j.ageMax || 40 },
+          ageLimit: { min: j.ageMin || 18, max: j.ageMax || 45 },
           type: j.type || (jobType === 'All' ? 'Private' : jobType)
         }));
       }
     } catch (e) {
-      console.warn("Parse failed.");
+      console.warn("Parsing failed, raw response used.");
     }
 
     return { jobs, sources };
   } catch (error: any) {
+    // If the key is specifically invalid, clear it
     if (error?.message?.includes('API key not valid')) {
       localStorage.removeItem('IJF_API_KEY');
       throw new Error("API_KEY_INVALID");
