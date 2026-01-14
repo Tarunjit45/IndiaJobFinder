@@ -3,7 +3,19 @@ import { GoogleGenAI } from "@google/genai";
 import { Job } from "../types";
 
 const getApiKey = () => {
-  return typeof process !== 'undefined' ? process.env?.API_KEY : '';
+  // 1. Check localStorage for user-provided key
+  const savedKey = localStorage.getItem('IJF_API_KEY');
+  if (savedKey) return savedKey;
+
+  // 2. Check various environment variable patterns
+  const envKey = 
+    (process.env as any)?.API_KEY || 
+    (process.env as any)?.VITE_API_KEY || 
+    (process.env as any)?.NEXT_PUBLIC_API_KEY ||
+    (window as any).process?.env?.API_KEY || 
+    "";
+    
+  return envKey;
 };
 
 export const searchJobs = async (age: number, jobType: string, onProgress?: (msg: string) => void): Promise<{ jobs: Job[], sources: any[] }> => {
@@ -15,86 +27,53 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
 
   const ai = new GoogleGenAI({ apiKey });
 
-  onProgress?.("Initiating Global Deep Scan...");
+  onProgress?.("Initiating Deep Scan...");
 
-  // Optimized single-pass prompt. Even with googleSearch, we can ask for a specific 
-  // text structure that is extremely easy to parse (like a pseudo-JSON block).
-  const prompt = `SEARCH REQUEST: Find 8 active ${jobType} job openings in India for a ${age}-year-old candidate.
-  
-  TARGETS: 
-  - Recent State/Central Govt notifications.
-  - New private sector openings from LinkedIn/Startups.
-  
-  OUTPUT FORMAT:
-  You must provide a strictly formatted list. Start with the token [DATA_START] and end with [DATA_END].
-  Inside, provide a JSON-like array of objects with these keys: id, title, organization, type, location, ageMin, ageMax, eligibility, lastDate, sourceUrl, isUpcoming.
-  
-  Only include results that match the age: ${age}.`;
+  const prompt = `Find 8 active ${jobType} job openings in India for a ${age}-year-old. 
+  Focus on the most recent 2024/2025 notifications. 
+  Strictly format the result as a JSON array between [DATA_START] and [DATA_END]. 
+  Keys: id, title, organization, type, location, ageMin, ageMax, eligibility, lastDate, sourceUrl, isUpcoming.`;
 
   try {
-    onProgress?.("Accessing Google Search Index...");
+    onProgress?.("Searching Indian Portals...");
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        // Using a small thinking budget to speed up reasoning while maintaining quality
-        thinkingConfig: { thinkingBudget: 0 } 
       },
     });
 
-    onProgress?.("Extracting Data Points...");
-    const text = response.text;
+    onProgress?.("Decoding results...");
+    const text = response.text || "";
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
     let jobs: Job[] = [];
-    
-    // Efficient extraction using string markers
     const dataMatch = text.match(/\[DATA_START\]([\s\S]*?)\[DATA_END\]/);
-    const jsonToParse = dataMatch ? dataMatch[1] : text;
+    const jsonStr = dataMatch ? dataMatch[1] : text;
 
     try {
-      // Find the first '[' and last ']' to isolate the array
-      const startIdx = jsonToParse.indexOf('[');
-      const endIdx = jsonToParse.lastIndexOf(']');
-      
-      if (startIdx !== -1 && endIdx !== -1) {
-        const cleanedJson = jsonToParse.substring(startIdx, endIdx + 1);
-        const rawJobs = JSON.parse(cleanedJson);
-        
-        // Map to our internal type
-        jobs = rawJobs.map((j: any) => ({
+      const start = jsonStr.indexOf('[');
+      const end = jsonStr.lastIndexOf(']');
+      if (start !== -1 && end !== -1) {
+        const cleaned = jsonStr.substring(start, end + 1);
+        jobs = JSON.parse(cleaned).map((j: any) => ({
+          ...j,
           id: j.id || Math.random().toString(36).substr(2, 9),
-          title: j.title || "Job Opening",
-          organization: j.organization || "Unknown Org",
-          type: j.type || "Private",
-          location: j.location || "India",
-          ageLimit: { min: j.ageMin || 18, max: j.ageMax || 45 },
-          eligibility: j.eligibility || "Check source for details",
-          lastDate: j.lastDate || "N/A",
-          sourceUrl: j.sourceUrl || "",
-          isUpcoming: !!j.isUpcoming,
-          description: j.description || ""
+          ageLimit: { min: j.ageMin || 18, max: j.ageMax || 40 },
+          type: j.type || (jobType === 'All' ? 'Private' : jobType)
         }));
       }
     } catch (e) {
-      console.warn("Fast parse failed, trying secondary extraction...");
-      // If the primary parse failed, we'll do one quick cleanup pass
-      const cleanup = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Convert this text into a clean JSON array of jobs: ${text.substring(0, 2000)}`,
-        config: { responseMimeType: "application/json" }
-      });
-      jobs = JSON.parse(cleanup.text);
+      console.warn("Parse failed.");
     }
 
-    onProgress?.("Scan Complete.");
     return { jobs, sources };
   } catch (error: any) {
-    if (error?.message?.includes('Requested entity was not found')) {
+    if (error?.message?.includes('API key not valid')) {
+      localStorage.removeItem('IJF_API_KEY');
       throw new Error("API_KEY_INVALID");
     }
-    console.error("Search Error:", error);
-    return { jobs: [], sources: [] };
+    throw error;
   }
 };
