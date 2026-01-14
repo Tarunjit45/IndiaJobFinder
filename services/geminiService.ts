@@ -5,20 +5,14 @@ import { Job } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 export const searchJobs = async (age: number, jobType: string): Promise<{ jobs: Job[], sources: any[] }> => {
-  // Deep search prompt targeting niche and non-popular jobs
+  // Deep search prompt targeting niche and non-popular jobs with strict JSON output
   const prompt = `DEEP WEB SEARCH: Find EVERY possible ${jobType} job in India suitable for age ${age}. 
-  DO NOT LIMIT to popular sites. Search for:
-  1. Niche regional/state department notifications (e.g., specific Municipalities, local cooperatives, State PSCs).
-  2. Less-known private startups, local industrial estates, and specialized technical roles.
-  3. "Hidden" jobs that aren't on major aggregators but are on official departmental/company 'Careers' pages.
-  4. Both ongoing (active now) and upcoming (recently announced/leaked notifications).
-  
-  MANDATORY: Return a massive, comprehensive list. Include as many as possible. 
+  CRITICAL: Look for niche regional/state notifications, local startups, and departmental notifications (Sarkari, Private, Niche).
+  DO NOT limit to top 10. Return as many as found.
   
   RULES:
-  - If it's a future start date, isUpcoming: true.
-  - Identify if the source is 'Niche/Regional' in the description or title.
-  - JSON array ONLY. No text around it.
+  - isUpcoming: true if notification is recently released or starting soon.
+  - Return ONLY a valid JSON array.
   
   SCHEMA: {title, organization, type, location, ageLimit:{min,max}, eligibility, startDate, lastDate, sourceUrl, isUpcoming}`;
 
@@ -62,7 +56,7 @@ export const searchJobs = async (age: number, jobType: string): Promise<{ jobs: 
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     return { jobs, sources };
   } catch (error) {
-    console.error("Deep Search Failed:", error);
+    console.error("Vercel Search Error:", error);
     return { jobs: [], sources: [] };
   }
 };
