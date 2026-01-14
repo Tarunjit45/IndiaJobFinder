@@ -1,0 +1,7 @@
+{
+  "name": "IndiaJobFinder",
+  "description": "A comprehensive job search portal for Indian job seekers focusing on ongoing and upcoming government and private sector opportunities with age-based eligibility filtering.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
