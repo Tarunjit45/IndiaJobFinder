@@ -19,6 +19,7 @@ const STATIC_FALLBACK_JOBS: Job[] = [
 ];
 
 const getApiKey = () => {
+  // Checks LocalStorage first (for Admin/Manual entry) then Environment
   return localStorage.getItem('IJF_API_KEY') || (process.env as any)?.API_KEY || "";
 };
 
@@ -30,9 +31,10 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
   try {
     let globalJobs: any[] = [];
 
-    // 1. CHECK CLOUD DATABASE FIRST (If initialized)
+    // 1. CHECK CLOUD DATABASE FIRST (Shared Job Pool)
+    // This allows regular users to see jobs without using an API key or hitting rate limits
     if (supabase) {
-      onProgress?.("Searching Shared Job Pool...");
+      onProgress?.("Checking Shared Job Pool...");
       
       let query = supabase
         .from('shared_jobs')
@@ -46,15 +48,15 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
 
       const { data, error } = await query
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(30);
 
       if (!error && data) {
         globalJobs = data;
       }
 
-      // If we have significant fresh jobs (e.g., 8+), return them and skip AI
-      if (globalJobs.length >= 8) {
-        onProgress?.(`Found ${globalJobs.length} matches in Cloud!`);
+      // If we have plenty of matches in the cloud, serve them immediately to save your API quota
+      if (globalJobs.length >= 10) {
+        onProgress?.(`Retrieved ${globalJobs.length} matches from Cloud!`);
         return { 
           jobs: globalJobs.map(j => ({
             ...j, 
@@ -67,24 +69,28 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
       }
     }
 
-    // 2. CALL AI ONLY IF DATABASE IS THIN
+    // 2. AI SCAN (ADMIN/KEY HOLDERS ONLY)
+    // If we reach here, the database is "thin" for this specific age/type.
+    // If the user doesn't have a key, we just give them whatever is in the DB + Fallbacks.
     if (!apiKey) {
-       // If no API key and we have some DB results, show them
        if (globalJobs.length > 0) {
+          onProgress?.("Serving existing shared results...");
           return { 
             jobs: globalJobs.map(j => ({...j, id: j.id.toString(), ageLimit: { min: j.ageMin, max: j.ageMax }})), 
             sources: [], 
             isFallback: false 
           };
        }
-       throw new Error("No API Key Provided");
+       throw new Error("Shared pool is empty and no Admin API key found.");
     }
 
+    // Admin-only logic starts here
     const ai = new GoogleGenAI({ apiKey });
-    onProgress?.("Scanning Web for Live Notifications...");
+    onProgress?.("Cloud database thin. Admin Scanning Web for New Jobs...");
 
     const prompt = `Find 10 ACTIVE Indian job notifications for age ${age}, category ${jobType}. 
-    Current Date: ${TODAY_STR}. Return ONLY a JSON array between [START] and [END].
+    Current Date: ${TODAY_STR}. Deadline must be after today.
+    Return ONLY a JSON array between [START] and [END].
     JSON fields: title, organization, type, location, ageMin, ageMax, eligibility, lastDate, description, sourceUrl`;
 
     const response = await ai.models.generateContent({
@@ -108,11 +114,12 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
         newJobs = JSON.parse(jsonStr.substring(start, end + 1));
       }
     } catch (e) {
-      console.error("AI Parse error");
+      console.error("AI Response parsing failed");
     }
 
-    // 3. UPSERT NEW JOBS TO CLOUD (If initialized)
+    // 3. UPSERT TO CLOUD (Share Admin's findings with all users)
     if (supabase && newJobs.length > 0) {
+      onProgress?.("Updating Shared Cloud Pool...");
       const formattedForDb = newJobs.map(j => ({
         title: j.title,
         organization: j.organization,
@@ -126,10 +133,11 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
         sourceUrl: j.sourceUrl
       }));
 
+      // This uses the 'title, organization' unique constraint in your Supabase table
       await supabase.from('shared_jobs').upsert(formattedForDb, { onConflict: 'title,organization' });
     }
 
-    // 4. FINAL MERGE & DISPLAY
+    // 4. FINAL MERGE
     const combined = [...newJobs, ...globalJobs];
     const uniqueJobs = combined
       .filter((v, i, a) => a.findIndex(t => t.title === v.title && t.organization === v.organization) === i)
@@ -143,8 +151,8 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
     return { jobs: uniqueJobs, sources: [], isFallback: false };
 
   } catch (error) {
-    console.error("Search error:", error);
-    onProgress?.("Limit reached. Showing verified offline jobs.");
+    console.error("Service Error:", error);
+    onProgress?.("Notice: Serving Verified Offline Jobs.");
     return { 
       jobs: STATIC_FALLBACK_JOBS.filter(j => (jobType === 'All' || j.type === jobType) && age >= j.ageLimit.min && age <= j.ageLimit.max), 
       sources: [], 
