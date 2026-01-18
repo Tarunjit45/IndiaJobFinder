@@ -1,7 +1,29 @@
 {
   "version": 2,
-  "cleanUrls": true,
-  "trailingSlash": false,
+  "headers": [
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/sitemap.xml",
@@ -12,7 +34,7 @@
       "destination": "/robots.txt"
     },
     {
-      "source": "/((?!sitemap\\.xml|robots\\.txt|.*\\.(?:xml|txt|png|svg|jpg|js|css|ico|json)$|api).*)$",
+      "source": "/((?!api|sitemap\\.xml|robots\\.txt|_next|static|favicon\\.ico|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]
