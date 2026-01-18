@@ -1,12 +1,28 @@
 {
   "version": 2,
   "cleanUrls": false,
+  "trailingSlash": false,
   "headers": [
     {
       "source": "/sitemap.xml",
       "headers": [
-        { "key": "Content-Type", "value": "application/xml; charset=utf-8" },
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        {
+          "key": "Content-Type",
+          "value": "application/xml; charset=utf-8"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        }
       ]
     }
   ],
@@ -16,7 +32,11 @@
       "destination": "/sitemap.xml"
     },
     {
-      "source": "/((?!api|_next|static|sitemap\\.xml|robots\\.txt|favicon\\.ico).*)",
+      "source": "/robots.txt",
+      "destination": "/robots.txt"
+    },
+    {
+      "source": "/((?!api|_next|static|sitemap\\.xml|robots\\.txt|favicon\\.ico|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]
