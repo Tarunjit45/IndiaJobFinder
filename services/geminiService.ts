@@ -1,6 +1,8 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { Job } from "../types";
+
+// Key for browser storage
+const CACHE_KEY = 'IJF_GLOBAL_JOB_CACHE';
 
 const STATIC_FALLBACK_JOBS: Job[] = [
   {
@@ -15,52 +17,31 @@ const STATIC_FALLBACK_JOBS: Job[] = [
     description: 'Ongoing and upcoming central government recruitments for various departments.',
     sourceUrl: 'https://ssc.gov.in',
     isUpcoming: true
-  },
-  {
-    id: 'fb-gen-2',
-    title: 'UPSC Examination Calendar',
-    organization: 'Union Public Service Commission',
-    type: 'Government',
-    location: 'Pan India',
-    ageLimit: { min: 21, max: 32 },
-    eligibility: 'Any Graduate',
-    lastDate: 'Check official portal',
-    description: 'Civil Services, NDA, CDS, and Engineering Services notifications.',
-    sourceUrl: 'https://www.upsc.gov.in',
-    isUpcoming: false
-  },
-  {
-    id: 'fb-gen-3',
-    title: 'IBPS Banking Jobs 2025',
-    organization: 'Institute of Banking Personnel Selection',
-    type: 'Government',
-    location: 'Multiple Banks',
-    ageLimit: { min: 20, max: 30 },
-    eligibility: 'Any Graduate',
-    lastDate: 'Check Site',
-    description: 'Recruitment for PO, Clerk, and Specialist Officers in public sector banks.',
-    sourceUrl: 'https://ibps.in',
-    isUpcoming: false
-  },
-  {
-    id: 'fb-gen-4',
-    title: 'Railway Recruitment (RRB) NTPC',
-    organization: 'Railway Recruitment Board',
-    type: 'Government',
-    location: 'All India',
-    ageLimit: { min: 18, max: 33 },
-    eligibility: '12th / Graduate',
-    lastDate: 'Various',
-    description: 'Mass recruitment for non-technical popular categories in Indian Railways.',
-    sourceUrl: 'https://indianrailways.gov.in',
-    isUpcoming: true
   }
+  // ... (keep your other static jobs here)
 ];
+
+// HELPER: Get jobs saved from previous AI searches
+const getCachedJobs = (): Job[] => {
+  const saved = localStorage.getItem(CACHE_KEY);
+  return saved ? JSON.parse(saved) : [];
+};
+
+// HELPER: Save new jobs to the cache without duplicates
+const saveToCache = (newJobs: Job[]) => {
+  const existing = getCachedJobs();
+  // Merge and remove duplicates based on Title + Org
+  const combined = [...newJobs, ...existing];
+  const unique = combined.filter((job, index, self) =>
+    index === self.findIndex((t) => t.title === job.title && t.organization === job.organization)
+  );
+  // Keep only the latest 100 jobs to avoid slowing down the browser
+  localStorage.setItem(CACHE_KEY, JSON.stringify(unique.slice(0, 100)));
+};
 
 const getApiKey = () => {
   const savedKey = localStorage.getItem('IJF_API_KEY');
-  if (savedKey) return savedKey;
-  return (process.env as any)?.API_KEY || "";
+  return savedKey || (process.env as any)?.API_KEY || "";
 };
 
 export const searchJobs = async (age: number, jobType: string, onProgress?: (msg: string) => void): Promise<{ jobs: Job[], sources: any[], isFallback: boolean }> => {
@@ -68,29 +49,34 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
   const now = new Date();
   const TODAY_STR = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
   
+  // 1. Get previously searched jobs from Cache
+  const cachedHistory = getCachedJobs().filter(j => 
+    (jobType === 'All' || j.type === jobType) && 
+    age >= j.ageLimit.min && 
+    age <= j.ageLimit.max
+  );
+
   if (!apiKey) {
-    onProgress?.(`Viewing Active Jobs as of ${TODAY_STR}...`);
+    onProgress?.(`Viewing Cache & Fallbacks...`);
     return { 
-      jobs: STATIC_FALLBACK_JOBS.filter(j => (jobType === 'All' || j.type === jobType) && age >= j.ageLimit.min && age <= j.ageLimit.max), 
+      jobs: [...cachedHistory, ...STATIC_FALLBACK_JOBS].slice(0, 15), 
       sources: [],
       isFallback: true 
     };
   }
 
-  // Use Gemini Flash Lite: The fastest model for free-tier users
   const ai = new GoogleGenAI({ apiKey: apiKey });
-  onProgress?.(`Deep Scan for ${TODAY_STR}...`);
+  onProgress?.(`Scanning for NEW jobs to add to your list...`);
 
-  // Maximize results by asking for 15 jobs instead of 6
-  const prompt = `DATE: ${TODAY_STR}. Find up to 15 REAL and ACTIVE Indian job openings for age ${age}, category ${jobType}. 
-  SEARCH PRIORITY: sarkariresult.com, freejobalert.com, official SSC/UPSC/IBPS/RRB sites, and top IT company career pages.
+  const prompt = `DATE: ${TODAY_STR}. Find 10 REAL and ACTIVE Indian job openings for age ${age}, category ${jobType}. 
+  SEARCH PRIORITY: sarkariresult.com, freejobalert.com, official portals.
   DEADLINE MUST BE AFTER ${TODAY_STR}. 
   Return ONLY a JSON array between [START] and [END]. 
   Fields: id, title, organization, type, location, ageMin, ageMax, eligibility, lastDate, description, sourceUrl, isUpcoming`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-lite-latest", 
+      model: "gemini-1.5-flash-lite", // Updated to standard 1.5 flash lite
       contents: prompt,
       config: { 
         tools: [{ googleSearch: {} }],
@@ -100,7 +86,7 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
 
     const text = response.text || "";
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    let jobs: Job[] = [];
+    let newJobs: Job[] = [];
     
     const dataMatch = text.match(/\[START\]([\s\S]*?)\[END\]/);
     const jsonStr = dataMatch ? dataMatch[1] : text;
@@ -109,7 +95,7 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
       const start = jsonStr.indexOf('[');
       const end = jsonStr.lastIndexOf(']');
       if (start !== -1 && end !== -1) {
-        jobs = JSON.parse(jsonStr.substring(start, end + 1)).map((j: any) => ({
+        newJobs = JSON.parse(jsonStr.substring(start, end + 1)).map((j: any) => ({
           ...j,
           id: j.id || `live-${Math.random().toString(36).substr(2, 5)}`,
           ageLimit: { min: j.ageMin || 18, max: j.ageMax || 45 },
@@ -117,18 +103,29 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
         }));
       }
     } catch (e) {
-      throw new Error("Parse Error");
+      console.error("Parse failed, using cache only.");
     }
 
-    // Sort to show urgent deadlines first
-    const sortedJobs = jobs.sort((a, b) => a.lastDate.localeCompare(b.lastDate));
+    // 2. SAVE the new AI results to the cache for future use
+    if (newJobs.length > 0) {
+      saveToCache(newJobs);
+    }
+
+    // 3. MERGE: Previous Cached Jobs + New AI Jobs
+    const finalDisplayList = [...newJobs, ...cachedHistory];
+    
+    // Sort by deadline
+    const sortedJobs = finalDisplayList.sort((a, b) => a.lastDate.localeCompare(b.lastDate));
 
     return { jobs: sortedJobs, sources, isFallback: false };
+
   } catch (error: any) {
-    console.error("Scan Error:", error);
-    onProgress?.("Switching to Verified Database...");
+    console.error("API Limit or Error:", error);
+    onProgress?.("API Busy. Showing Cached & Verified Jobs...");
     return { 
-      jobs: STATIC_FALLBACK_JOBS.filter(j => (jobType === 'All' || j.type === jobType) && age >= j.ageLimit.min && age <= j.ageLimit.max), 
+      jobs: [...cachedHistory, ...STATIC_FALLBACK_JOBS].filter(j => 
+        (jobType === 'All' || j.type === jobType) && age >= j.ageLimit.min && age <= j.ageLimit.max
+      ), 
       sources: [],
       isFallback: true 
     };
