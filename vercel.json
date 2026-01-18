@@ -5,27 +5,7 @@
     {
       "source": "/sitemap.xml",
       "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/xml; charset=utf-8"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/robots.txt",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "text/plain; charset=utf-8"
-        }
+        { "key": "Content-Type", "value": "application/xml; charset=utf-8" }
       ]
     }
   ],
@@ -39,7 +19,7 @@
       "destination": "/robots.txt"
     },
     {
-      "source": "/((?!api|sitemap\\.xml|robots\\.txt|_next|static|favicon\\.ico|.*\\..*).*)",
+      "source": "/((?!api|_next|static|favicon\\.ico).*)",
       "destination": "/index.html"
     }
   ]
