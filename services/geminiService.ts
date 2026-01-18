@@ -81,7 +81,7 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
   const apiKey = getApiKey();
   
   if (!apiKey) {
-    onProgress?.("No API key found. Showing popular Indian jobs...");
+    onProgress?.("Loading preview mode...");
     return { 
       jobs: STATIC_FALLBACK_JOBS.filter(j => (jobType === 'All' || j.type === jobType) && age >= j.ageLimit.min && age <= j.ageLimit.max), 
       sources: [],
@@ -90,24 +90,27 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  onProgress?.("Deep Scanning Indian Portals...");
+  onProgress?.("Lightning Scan in progress...");
 
-  const prompt = `Find 8 active ${jobType} job openings in India for a ${age}-year-old. 
-  Focus on the most recent 2024/2025 notifications. 
-  Strictly format as JSON between [DATA_START] and [DATA_END]. 
+  const prompt = `FAST SEARCH: 6 active ${jobType} jobs in India for age ${age}. 
+  Return ONLY JSON array between [START] and [END]. 
   Keys: id, title, organization, type, location, ageMin, ageMax, eligibility, lastDate, sourceUrl, isUpcoming.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-lite-latest",
       contents: prompt,
-      config: { tools: [{ googleSearch: {} }] },
+      config: { 
+        tools: [{ googleSearch: {} }],
+        temperature: 0.1, // Lower temperature for faster/more consistent JSON
+      },
     });
 
     const text = response.text || "";
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     let jobs: Job[] = [];
-    const dataMatch = text.match(/\[DATA_START\]([\s\S]*?)\[DATA_END\]/);
+    
+    const dataMatch = text.match(/\[START\]([\s\S]*?)\[END\]/);
     const jsonStr = dataMatch ? dataMatch[1] : text;
 
     try {
@@ -122,13 +125,12 @@ export const searchJobs = async (age: number, jobType: string, onProgress?: (msg
         }));
       }
     } catch (e) {
-      console.warn("Parse failed.");
+      throw new Error("Parse Error");
     }
 
     return { jobs, sources, isFallback: false };
   } catch (error: any) {
-    console.error("API Error:", error);
-    // FALLBACK LOGIC: If rate limited or error, return static data
+    console.error("API Error or Timeout:", error);
     onProgress?.("API busy. Loading trending opportunities...");
     return { 
       jobs: STATIC_FALLBACK_JOBS.filter(j => (jobType === 'All' || j.type === jobType) && age >= j.ageLimit.min && age <= j.ageLimit.max), 
