@@ -1,8 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { Job } from "../types";
-
-// Key for browser storage
-const CACHE_KEY = 'IJF_GLOBAL_JOB_CACHE';
+import { supabase } from "../lib/supabase";
 
 const STATIC_FALLBACK_JOBS: Job[] = [
   {
@@ -14,119 +12,142 @@ const STATIC_FALLBACK_JOBS: Job[] = [
     ageLimit: { min: 18, max: 32 },
     eligibility: 'Bachelor\'s Degree / 12th',
     lastDate: 'Varies by Post',
-    description: 'Ongoing and upcoming central government recruitments for various departments.',
+    description: 'Ongoing central government recruitments.',
     sourceUrl: 'https://ssc.gov.in',
     isUpcoming: true
   }
-  // ... (keep your other static jobs here)
 ];
 
-// HELPER: Get jobs saved from previous AI searches
-const getCachedJobs = (): Job[] => {
-  const saved = localStorage.getItem(CACHE_KEY);
-  return saved ? JSON.parse(saved) : [];
-};
-
-// HELPER: Save new jobs to the cache without duplicates
-const saveToCache = (newJobs: Job[]) => {
-  const existing = getCachedJobs();
-  // Merge and remove duplicates based on Title + Org
-  const combined = [...newJobs, ...existing];
-  const unique = combined.filter((job, index, self) =>
-    index === self.findIndex((t) => t.title === job.title && t.organization === job.organization)
-  );
-  // Keep only the latest 100 jobs to avoid slowing down the browser
-  localStorage.setItem(CACHE_KEY, JSON.stringify(unique.slice(0, 100)));
-};
-
 const getApiKey = () => {
-  const savedKey = localStorage.getItem('IJF_API_KEY');
-  return savedKey || (process.env as any)?.API_KEY || "";
+  return localStorage.getItem('IJF_API_KEY') || (process.env as any)?.API_KEY || "";
 };
 
 export const searchJobs = async (age: number, jobType: string, onProgress?: (msg: string) => void): Promise<{ jobs: Job[], sources: any[], isFallback: boolean }> => {
   const apiKey = getApiKey();
   const now = new Date();
   const TODAY_STR = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-  
-  // 1. Get previously searched jobs from Cache
-  const cachedHistory = getCachedJobs().filter(j => 
-    (jobType === 'All' || j.type === jobType) && 
-    age >= j.ageLimit.min && 
-    age <= j.ageLimit.max
-  );
-
-  if (!apiKey) {
-    onProgress?.(`Viewing Cache & Fallbacks...`);
-    return { 
-      jobs: [...cachedHistory, ...STATIC_FALLBACK_JOBS].slice(0, 15), 
-      sources: [],
-      isFallback: true 
-    };
-  }
-
-  const ai = new GoogleGenAI({ apiKey: apiKey });
-  onProgress?.(`Scanning for NEW jobs to add to your list...`);
-
-  const prompt = `DATE: ${TODAY_STR}. Find 10 REAL and ACTIVE Indian job openings for age ${age}, category ${jobType}. 
-  SEARCH PRIORITY: sarkariresult.com, freejobalert.com, official portals.
-  DEADLINE MUST BE AFTER ${TODAY_STR}. 
-  Return ONLY a JSON array between [START] and [END]. 
-  Fields: id, title, organization, type, location, ageMin, ageMax, eligibility, lastDate, description, sourceUrl, isUpcoming`;
 
   try {
+    let globalJobs: any[] = [];
+
+    // 1. CHECK CLOUD DATABASE FIRST (If initialized)
+    if (supabase) {
+      onProgress?.("Searching Shared Job Pool...");
+      
+      let query = supabase
+        .from('shared_jobs')
+        .select('*')
+        .lte('ageMin', age)
+        .gte('ageMax', age);
+
+      if (jobType !== 'All') {
+        query = query.eq('type', jobType);
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (!error && data) {
+        globalJobs = data;
+      }
+
+      // If we have significant fresh jobs (e.g., 8+), return them and skip AI
+      if (globalJobs.length >= 8) {
+        onProgress?.(`Found ${globalJobs.length} matches in Cloud!`);
+        return { 
+          jobs: globalJobs.map(j => ({
+            ...j, 
+            id: j.id.toString(),
+            ageLimit: { min: j.ageMin, max: j.ageMax }
+          })), 
+          sources: [], 
+          isFallback: false 
+        };
+      }
+    }
+
+    // 2. CALL AI ONLY IF DATABASE IS THIN
+    if (!apiKey) {
+       // If no API key and we have some DB results, show them
+       if (globalJobs.length > 0) {
+          return { 
+            jobs: globalJobs.map(j => ({...j, id: j.id.toString(), ageLimit: { min: j.ageMin, max: j.ageMax }})), 
+            sources: [], 
+            isFallback: false 
+          };
+       }
+       throw new Error("No API Key Provided");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+    onProgress?.("Scanning Web for Live Notifications...");
+
+    const prompt = `Find 10 ACTIVE Indian job notifications for age ${age}, category ${jobType}. 
+    Current Date: ${TODAY_STR}. Return ONLY a JSON array between [START] and [END].
+    JSON fields: title, organization, type, location, ageMin, ageMax, eligibility, lastDate, description, sourceUrl`;
+
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash-lite", // Updated to standard 1.5 flash lite
-      contents: prompt,
+      model: "gemini-3-flash-preview", 
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: { 
         tools: [{ googleSearch: {} }],
-        temperature: 0.1,
-      },
+        temperature: 0.1 
+      }
     });
 
     const text = response.text || "";
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    let newJobs: Job[] = [];
-    
     const dataMatch = text.match(/\[START\]([\s\S]*?)\[END\]/);
     const jsonStr = dataMatch ? dataMatch[1] : text;
 
+    let newJobs: any[] = [];
     try {
       const start = jsonStr.indexOf('[');
       const end = jsonStr.lastIndexOf(']');
       if (start !== -1 && end !== -1) {
-        newJobs = JSON.parse(jsonStr.substring(start, end + 1)).map((j: any) => ({
-          ...j,
-          id: j.id || `live-${Math.random().toString(36).substr(2, 5)}`,
-          ageLimit: { min: j.ageMin || 18, max: j.ageMax || 45 },
-          type: j.type || (jobType === 'All' ? 'Government' : jobType)
-        }));
+        newJobs = JSON.parse(jsonStr.substring(start, end + 1));
       }
     } catch (e) {
-      console.error("Parse failed, using cache only.");
+      console.error("AI Parse error");
     }
 
-    // 2. SAVE the new AI results to the cache for future use
-    if (newJobs.length > 0) {
-      saveToCache(newJobs);
+    // 3. UPSERT NEW JOBS TO CLOUD (If initialized)
+    if (supabase && newJobs.length > 0) {
+      const formattedForDb = newJobs.map(j => ({
+        title: j.title,
+        organization: j.organization,
+        type: j.type || (jobType === 'All' ? 'Government' : jobType),
+        location: j.location || 'India',
+        ageMin: j.ageMin || 18,
+        ageMax: j.ageMax || 45,
+        eligibility: j.eligibility,
+        lastDate: j.lastDate,
+        description: j.description,
+        sourceUrl: j.sourceUrl
+      }));
+
+      await supabase.from('shared_jobs').upsert(formattedForDb, { onConflict: 'title,organization' });
     }
 
-    // 3. MERGE: Previous Cached Jobs + New AI Jobs
-    const finalDisplayList = [...newJobs, ...cachedHistory];
-    
-    // Sort by deadline
-    const sortedJobs = finalDisplayList.sort((a, b) => a.lastDate.localeCompare(b.lastDate));
+    // 4. FINAL MERGE & DISPLAY
+    const combined = [...newJobs, ...globalJobs];
+    const uniqueJobs = combined
+      .filter((v, i, a) => a.findIndex(t => t.title === v.title && t.organization === v.organization) === i)
+      .map(j => ({
+        ...j,
+        id: j.id?.toString() || `job-${Math.random().toString(36).substr(2, 9)}`,
+        ageLimit: { min: j.ageMin || 18, max: j.ageMax || 45 },
+        type: j.type || (jobType === 'All' ? 'Government' : jobType)
+      }));
 
-    return { jobs: sortedJobs, sources, isFallback: false };
+    return { jobs: uniqueJobs, sources: [], isFallback: false };
 
-  } catch (error: any) {
-    console.error("API Limit or Error:", error);
-    onProgress?.("API Busy. Showing Cached & Verified Jobs...");
+  } catch (error) {
+    console.error("Search error:", error);
+    onProgress?.("Limit reached. Showing verified offline jobs.");
     return { 
-      jobs: [...cachedHistory, ...STATIC_FALLBACK_JOBS].filter(j => 
-        (jobType === 'All' || j.type === jobType) && age >= j.ageLimit.min && age <= j.ageLimit.max
-      ), 
-      sources: [],
+      jobs: STATIC_FALLBACK_JOBS.filter(j => (jobType === 'All' || j.type === jobType) && age >= j.ageLimit.min && age <= j.ageLimit.max), 
+      sources: [], 
       isFallback: true 
     };
   }
