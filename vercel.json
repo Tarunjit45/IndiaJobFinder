@@ -1,14 +1,6 @@
 {
   "version": 2,
   "cleanUrls": false,
-  "headers": [
-    {
-      "source": "/sitemap.xml",
-      "headers": [
-        { "key": "Content-Type", "value": "application/xml; charset=utf-8" }
-      ]
-    }
-  ],
   "rewrites": [
     {
       "source": "/sitemap.xml",
@@ -19,7 +11,7 @@
       "destination": "/robots.txt"
     },
     {
-      "source": "/((?!api|_next|static|favicon\\.ico).*)",
+      "source": "/((?!api|_next|static|sitemap\\.xml|robots\\.txt|favicon\\.ico).*)",
       "destination": "/index.html"
     }
   ]
