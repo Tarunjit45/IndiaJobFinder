@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (process.env as any).SUPABASE_URL || '';
-const supabaseAnonKey = (process.env as any).SUPABASE_ANON_KEY || '';
+// Vite uses import.meta.env instead of process.env
+// Variables MUST start with VITE_ to be accessible in the browser
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-// Prevent the app from crashing if Supabase is not yet configured
+// This prevents the app from crashing if keys are missing
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
