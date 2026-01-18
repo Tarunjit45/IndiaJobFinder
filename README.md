@@ -2,6 +2,12 @@
 
 A high-performance, eligibility-first job discovery engine tailored for the Indian workforce. Built with **Gemini 2.5 Flash Lite**, this platform scans government (Sarkari) and private sectors in real-time to match candidates based on their specific age and sector preferences.
 
+<img width="1843" height="911" alt="Screenshot 2026-01-18 180207" src="https://github.com/user-attachments/assets/e71e5dfc-d5ef-4a39-9a44-7a14913f8ffd" />
+<img width="1835" height="895" alt="Screenshot 2026-01-18 180230" src="https://github.com/user-attachments/assets/90e92b0b-d94c-4c2f-a9f8-65c6edfcb981" />
+<img width="1752" height="912" alt="Screenshot 2026-01-18 180244" src="https://github.com/user-attachments/assets/ae80b503-4637-4f6f-8e7c-5fab66a5b6de" />
+
+
+
 ## ⚡ Why This Exists?
 Finding jobs in India often involves navigating cluttered portals with outdated info. IndiaJobFinder uses **Real-Time Web Grounding** to find active notifications from 2024-2025 and filters them instantly based on your age—the most common disqualifier in Indian recruitment.
 
