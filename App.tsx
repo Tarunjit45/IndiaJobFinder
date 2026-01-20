@@ -127,17 +127,37 @@ const App: React.FC = () => {
         </section>
 
         <footer className="mt-24 py-12 border-t border-slate-100 flex flex-col items-center">
-            <div className="flex flex-wrap justify-center gap-8 mb-8">
-              <button onClick={() => setShowKeyModal(true)} className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest transition-colors flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                Engine Config
-              </button>
-              <button onClick={clearKey} className="text-[10px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest transition-colors">
-                Reset
-              </button>
-            </div>
-            <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.5em]">IndiaJobFinder Free Index © {currentYear}</p>
-        </footer>
+  {/* Engine Controls */}
+  <div className="flex flex-wrap justify-center gap-8 mb-8">
+    <button onClick={() => setShowKeyModal(true)} className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest transition-colors flex items-center gap-2">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+      Engine Config
+    </button>
+    <button onClick={clearKey} className="text-[10px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest transition-colors">
+      Reset
+    </button>
+  </div>
+
+  {/* Developer Credits */}
+  <div className="flex flex-col items-center gap-2 mb-6">
+    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+      Built with ❤️ by <span className="text-indigo-600">Tarunjit Biswas</span>
+    </p>
+    <a 
+      href="mailto:tarunjitbiswas24@gmail.com" 
+      className="text-[9px] font-medium text-slate-400 hover:text-indigo-500 transition-colors lowercase"
+    >
+      tarunjitbiswas24@gmail.com
+    </a>
+  </div>
+
+  {/* Copyright */}
+  <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.5em]">
+    IndiaJobFinder Free Index © {new Date().getFullYear()}
+  </p>
+</footer>
 
         {showKeyModal && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
