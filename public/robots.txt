@@ -1,4 +1,20 @@
 User-agent: *
 Allow: /
 
+# Directives for AI Search & Discovery
+User-agent: GPTBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Claude-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+
 Sitemap: https://india-job-finder.vercel.app/sitemap.xml
