@@ -1,52 +1,71 @@
-# 🇮🇳 IndiaJobFinder - AI Lightning Scanner
+# Indiajobfinder
 
-A high-performance, eligibility-first job discovery engine tailored for the Indian workforce. Built with **Gemini 2.5 Flash Lite**, this platform scans government (Sarkari) and private sectors in real-time to match candidates based on their specific age and sector preferences.
+[![GitHub License](https://img.shields.io/github/license/Tarunjit45/IndiaJobFinder?style=flat-square)](LICENSE)
+[![CI / Quality Check](https://github.com/Tarunjit45/IndiaJobFinder/actions/workflows/ci.yml/badge.svg)](https://github.com/Tarunjit45/IndiaJobFinder/actions)
+[![Language](https://img.shields.io/badge/Language-JavaScript/TypeScript-blue?style=flat-square)](https://github.com/Tarunjit45/IndiaJobFinder)
 
-<img width="1843" height="911" alt="Screenshot 2026-01-18 180207" src="https://github.com/user-attachments/assets/e71e5dfc-d5ef-4a39-9a44-7a14913f8ffd" />
-<img width="1835" height="895" alt="Screenshot 2026-01-18 180230" src="https://github.com/user-attachments/assets/90e92b0b-d94c-4c2f-a9f8-65c6edfcb981" />
-<img width="1752" height="912" alt="Screenshot 2026-01-18 180244" src="https://github.com/user-attachments/assets/ae80b503-4637-4f6f-8e7c-5fab66a5b6de" />
-
-
-
-## ⚡ Why This Exists?
-Finding jobs in India often involves navigating cluttered portals with outdated info. IndiaJobFinder uses **Real-Time Web Grounding** to find active notifications from 2024-2025 and filters them instantly based on your age—the most common disqualifier in Indian recruitment.
-
-## ✨ Key Features
-
-- **🚀 Lightning Engine**: Powered by `gemini-2.5-flash-lite-latest` for sub-3-second response times.
-- **🛡️ 100% Uptime Architecture**: Includes a "Smart Fallback" system. If the AI API is exhausted or busy, the app seamlessly switches to a curated database of trending Indian jobs (SSC, UPSC, Banking, etc.).
-- **🔞 Age-Verified Results**: Automatically discards jobs where your age falls outside the official notification limits.
-- **🔍 Dual-Sector Search**: Toggle between Government and Private sectors or scan both simultaneously.
-- **🔗 Source Verification**: Every AI-generated result includes grounding metadata linking back to official portals.
-- **🎨 Neo-Brutalist UI**: High-contrast, accessibility-focused design that works perfectly on mobile and desktop.
-
-## 🛠️ Technology Stack
-
-- **React 19**: Utilizing the latest concurrent rendering features.
-- **TypeScript**: Full type safety for job schemas and API responses.
-- **Google GenAI SDK**: Direct browser-to-model integration using `@google/genai`.
-- **Tailwind CSS**: Modern utility-first styling for a premium aesthetic.
-- **Import Maps**: No build-step required; runs directly in modern browsers via ESM.
-
-## 🚀 Getting Started
-
-1. **Prerequisites**: A modern web browser.
-2. **API Key**: 
-   - This app requires a Gemini API key to perform live web scans.
-   - Get a free key at [Google AI Studio](https://aistudio.google.com/app/apikey).
-3. **Usage**:
-   - Open the app.
-   - Click "Update API Key" at the bottom to save your key locally.
-   - Enter your age, select a sector, and hit **Fast Scan**.
-
-## 📁 Core Components
-
-- `App.tsx`: The heart of the application, managing state and the search lifecycle.
-- `services/geminiService.ts`: Specialized service that handles prompt engineering for the Flash-Lite model and manages the fallback logic.
-- `components/JobCard.tsx`: A robust UI component designed to highlight critical info like "Last Date" and "Eligibility" at a glance.
-
-## 📝 License
-This project is for educational and public service purposes, helping Indian job seekers find legitimate opportunities faster.
+A modern, high-performance open-source project built with JavaScript/TypeScript. Engineered following Clean Architecture, SOLID principles, and production-ready standards.
 
 ---
-*Built with ❤️ for Indian Job Seekers.*
+
+## 🌟 Key Features
+
+- **Robust Architecture:** Modular and clean separation of concerns.
+- **Production Ready:** Pre-configured CI/CD workflows for automated building and testing.
+- **Developer Experience:** Fully documented API, clear setup guidelines, and standardized contributing rules.
+- **Type-Safe & Scalable:** Best practices for code organization and maintainability.
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Modern runtime environment (JavaScript/TypeScript)
+- Git
+
+### Installation
+
+```bash
+git clone https://github.com/Tarunjit45/IndiaJobFinder.git
+cd IndiaJobFinder
+```
+
+### Install Dependencies
+
+```bash
+npm install
+```
+
+### Run Project
+
+```bash
+npm run dev # or npm start
+```
+
+### Run Tests
+
+```bash
+npm test
+```
+
+---
+
+## 🗺️ Roadmap & Future Enhancements
+
+- [x] Initial architecture & core features
+- [x] Standardized open-source governance & CI/CD
+- [ ] Automated end-to-end test expansion
+- [ ] Production deployment & release tags
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE OF CONDUCT](CODE_OF_CONDUCT.md) before submitting Pull Requests.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
