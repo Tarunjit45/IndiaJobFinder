@@ -10,17 +10,17 @@ The Deep Scan engine looks beyond popular aggregators to find regional departmen
 
 ## ✨ Key Features & Architecture
 
-- **High-Performance Architecture:** Engineered using modern `TypeScript` best practices.
-- **Modular & Scalable Design:** Structured code organization for easy maintenance and deployment.
-- **Real-Time Data Persistence:** Database integration with row-level security and high reliability.
+- **High-Performance Codebase:** Built using `TypeScript` and modern engineering principles.
+- **Modular & Scalable Design:** Structured directory tree for seamless development and deployment.
+- **Cloud Database Persistence:** Real-time data sync with secure authentication and API layer.
 
-## 🛠️ Tech Stack & Technologies
+## 🛠️ Tech Stack & Dependencies
 
-- **Primary Language:** `TypeScript`
-- **Frameworks & Libraries:** React 18, Supabase, TypeScript, Vite
-- **Deployment Target:** Vercel Edge / Cloud Infrastructure
+- **Core Language:** `TypeScript`
+- **Libraries & Tools:** React 18, Vite, Supabase, TypeScript
+- **Deployment Infrastructure:** Vercel Edge / Cloud Services
 
-## 📁 Project Directory Structure
+## 📁 Architecture & File Layout
 
 ```text
 IndiaJobFinder/
@@ -39,16 +39,16 @@ IndiaJobFinder/
 ├── README.md
 ├── components
 ├── components/Header.tsx
-└── ... [additional source files]
+└── ... [additional codebase files]
 ```
 
-## 🚀 Getting Started
+## 🚀 Quickstart & Installation
 
 ### Prerequisites
 - Node.js (v18.0.0 or higher)
-- npm or yarn
+- npm or yarn package manager
 
-### Installation & Local Setup
+### Setup Instructions
 
 1. **Clone the repository:**
    ```bash
@@ -61,12 +61,12 @@ IndiaJobFinder/
    npm install
    ```
 
-3. **Start development server:**
+3. **Launch development server:**
    ```bash
    npm run dev
    ```
 
-## 📜 License & Author
+## 📜 Author & License
 
-Engineered with ❤️ by **[Tarunjit Biswas](https://github.com/Tarunjit45)**.  
-Released under the **MIT License**.
+Architected & Developed by **[Tarunjit Biswas](https://github.com/Tarunjit45)**.  
+Distributed under the **MIT License**.
